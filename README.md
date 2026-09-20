@@ -71,6 +71,10 @@ npm run check
    - `https://TEN_GITHUB.github.io` cho GitHub Pages project site.
 5. Không tạo hoặc commit client secret. Frontend chỉ cần OAuth Client ID công khai.
 
+### 3.1. Nếu gặp lỗi 403 `access_denied`
+
+Google Auth Platform đang ở trạng thái **Testing** thì chỉ các tài khoản trong **Audience → Test users** mới được đăng nhập. Thêm từng email Google sẽ sử dụng 3DTR (tối đa 100 tài khoản trước khi xác minh). Muốn mở cho người dùng bất kỳ, cần hoàn thiện Branding và gửi ứng dụng Google xét duyệt vì quyền Drive/Sheets là nhóm quyền nhạy cảm.
+
 ### 4. Cấu hình frontend
 
 Sửa `config.js`:
