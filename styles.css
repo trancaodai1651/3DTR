@@ -168,6 +168,12 @@ main { max-width: 1440px; margin: 0 auto; padding: 12px 32px 48px; }
 .file-manager-actions select { flex: 1 1 260px; min-width: 0; }
 .file-manager-actions .button { white-space: nowrap; }
 .file-manager .microcopy { max-width: 820px; margin: 0 0 14px; }
+.file-import-row { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.file-import-row label { color: var(--green-800); font-size: .78rem; font-weight: 800; }
+.file-import-controls { display: flex; gap: 10px; align-items: center; }
+.file-import-controls input { flex: 1 1 320px; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #cad9d4; border-radius: 11px; color: var(--ink); background: rgba(255,255,255,.92); outline: none; }
+.file-import-controls input:focus { border-color: var(--green-600); box-shadow: 0 0 0 4px rgba(13,148,136,.11); }
+.file-import-row small { color: var(--muted); font-size: .74rem; line-height: 1.5; }
 .table-scroll { overflow: auto; max-height: calc(100vh - 238px); }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; font-size: .75rem; }
@@ -219,6 +225,8 @@ code { padding: 2px 5px; border-radius: 5px; background: #e8f1ed; color: var(--g
   .entry-form { padding: 16px 13px; }
   .file-manager-actions { align-items: stretch; flex-direction: column; }
   .file-manager-actions select, .file-manager-actions .button { width: 100%; }
+  .file-import-controls { align-items: stretch; flex-direction: column; }
+  .file-import-controls input, .file-import-controls .button { width: 100%; }
   .form-grid { gap: 14px 10px; }
   .field, .field.wide { grid-column: 1 / -1; }
   .order-line-grid { grid-template-columns: 1fr; }

@@ -133,7 +133,7 @@ const el = Object.fromEntries([
   "userAvatar", "userName", "userEmail", "roleBadge", "sheetName", "demoBanner", "viewerBanner", "entryPermission",
   "kpiGrid", "channelChart", "dashboardRecent", "refreshButton", "entityTabs", "entryForm", "formFields", "formMessage",
   "submitButton", "recordEntity", "recordsHead", "recordsBody", "recordsEmpty", "toast",
-  "fileManager", "fileManagerMessage", "fileManagerRole", "sheetSelector", "createSheetButton", "downloadTemplateButton",
+  "fileManager", "fileManagerMessage", "fileManagerRole", "sheetSelector", "authorizeDriveButton", "createSheetButton", "downloadTemplateButton", "sheetLinkInput", "importSheetButton",
 ].map((id) => [id, document.getElementById(id)]));
 
 document.addEventListener("DOMContentLoaded", init);
@@ -166,7 +166,9 @@ function bindEvents() {
   el.logoutButton.addEventListener("click", logout);
   el.refreshButton.addEventListener("click", refreshAll);
   el.sheetSelector.addEventListener("change", () => selectSpreadsheet(el.sheetSelector.value));
+  el.authorizeDriveButton.addEventListener("click", requestDriveAccessAndLoad);
   el.createSheetButton.addEventListener("click", createPersonalSheet);
+  el.importSheetButton.addEventListener("click", importSheet);
   el.entryForm.addEventListener("submit", submitEntry);
   el.recordEntity.addEventListener("change", loadRecords);
   document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => showPanel(button.dataset.view)));
@@ -183,38 +185,65 @@ function decodeCredential(token) {
   }
 }
 
-function requestGoogleDriveAccess() {
+function requestGoogleDriveAccess({ prompt = "consent" } = {}) {
   return new Promise((resolve, reject) => {
     if (!window.google?.accounts?.oauth2) return reject(new Error("Google OAuth chưa sẵn sàng. Hãy tải lại trang."));
+    let settled = false;
+    const timeout = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Cửa sổ cấp quyền Google chưa hoàn tất. Hãy cho phép cửa sổ bật lên rồi bấm Cấp quyền Drive/Sheets để thử lại."));
+    }, 15000);
     state.oauthClient = google.accounts.oauth2.initTokenClient({
       client_id: config.googleClientId,
       scope: config.driveScopes || "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
       callback: (response) => {
-        if (response.error) return reject(new Error("Bạn chưa cấp quyền Google Drive/Sheets cho 3DTR."));
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        if (response.error) return reject(new Error(response.error === "access_denied" ? "Bạn chưa cấp quyền Google Drive/Sheets cho 3DTR." : "Không thể cấp quyền Google Drive/Sheets cho 3DTR."));
         state.accessToken = response.access_token;
         resolve(response);
       },
     });
-    state.oauthClient.requestAccessToken({ prompt: "consent" });
+    state.oauthClient.requestAccessToken({ prompt });
   });
+}
+
+function importedFilesKey() {
+  return `3dtr-imported-files-${String(state.user?.email || "anonymous").toLowerCase()}`;
+}
+
+function rememberedFileIds() {
+  try { return JSON.parse(localStorage.getItem(importedFilesKey()) || "[]").filter((id) => /^[a-zA-Z0-9_-]{20,}$/.test(id)); } catch (error) { return []; }
+}
+
+function rememberFileId(id) {
+  if (!id) return;
+  const ids = [id, ...rememberedFileIds().filter((item) => item !== id)].slice(0, 30);
+  localStorage.setItem(importedFilesKey(), JSON.stringify(ids));
 }
 
 async function loadFiles() {
   const files = await api("files");
   state.files = (Array.isArray(files) ? files : []).filter((file) => file.id !== config.templateSpreadsheetId);
+  const known = new Set(state.files.map((file) => file.id));
+  rememberedFileIds().filter((id) => !known.has(id)).forEach((id) => state.files.push({ id, name: "File đã import — chọn để kiểm tra", canEdit: false, remembered: true }));
   renderFileManager();
-  if (!state.files.length) el.fileManagerMessage.textContent = "Chưa có Google Sheet nào được cấp quyền. Hãy tải mẫu và bấm Tạo bản Google Sheet riêng; bản sao sẽ nằm trong Drive của bạn và không liên kết ngược với template.";
+  if (!state.files.length) el.fileManagerMessage.textContent = "Chưa có Google Sheet nào được cấp quyền. Hãy tải mẫu công khai, chuyển thành Google Sheet rồi dán link để import, hoặc bấm Tạo bản Google Sheet riêng.";
 }
 
 function renderFileManager() {
   if (!el.sheetSelector) return;
   el.sheetSelector.innerHTML = state.files.length
-    ? state.files.map((file) => `<option value="${escapeHtml(file.id)}">${escapeHtml(file.name)}${file.canEdit ? " · Editor" : " · Viewer"}</option>`).join("")
+    ? state.files.map((file) => `<option value="${escapeHtml(file.id)}">${escapeHtml(file.name)}${file.remembered ? " · cần kiểm tra quyền" : file.canEdit ? " · Editor" : " · Viewer"}</option>`).join("")
     : "<option value=\"\">Chưa có file Google Sheet chuẩn</option>";
   el.sheetSelector.value = state.spreadsheetId || state.files[0]?.id || "";
   el.fileManagerRole.textContent = state.role === "editor" ? "Editor" : state.role === "viewer" ? "Viewer" : "Chưa chọn";
   el.fileManagerRole.className = `badge${state.role === "none" ? " badge-muted" : ""}`;
   el.createSheetButton.disabled = !state.accessToken;
+  el.authorizeDriveButton.disabled = !state.credential;
+  el.importSheetButton.disabled = !state.accessToken;
 }
 
 async function selectSpreadsheet(spreadsheetId) {
@@ -223,6 +252,7 @@ async function selectSpreadsheet(spreadsheetId) {
     const session = await api("session", { spreadsheetId });
     if (!session.standard) throw new Error("File không đúng cấu trúc chuẩn 3DTR.");
     state.spreadsheetId = spreadsheetId;
+    rememberFileId(spreadsheetId);
     state.role = session.role;
     el.sheetName.textContent = session.spreadsheetName || state.files.find((file) => file.id === spreadsheetId)?.name || "Google Sheet 3DTR";
     el.viewerBanner.classList.toggle("hidden", state.role !== "viewer");
@@ -233,11 +263,52 @@ async function selectSpreadsheet(spreadsheetId) {
     setConnection(state.role === "editor" ? "Đã kết nối · Editor" : "Đã kết nối · Viewer", state.role);
     renderFileManager();
     await refreshAll();
+    return true;
   } catch (error) {
     state.role = "none";
     renderFileManager();
     toast(error.message, true);
     el.fileManagerMessage.textContent = `${error.message} Chỉ file có đủ 15 sheet chuẩn mới được sử dụng.`;
+    return false;
+  }
+}
+
+function extractSpreadsheetId(value) {
+  const input = String(value || "").trim();
+  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || input.match(/^([a-zA-Z0-9_-]{20,})$/);
+  return match ? match[1] : "";
+}
+
+async function importSheet() {
+  const id = extractSpreadsheetId(el.sheetLinkInput.value);
+  if (!id) return toast("Hãy dán link Google Sheet hoặc ID file hợp lệ.", true);
+  if (!state.accessToken) return toast("Hãy bấm Cấp quyền Drive/Sheets trước khi import.", true);
+  el.importSheetButton.disabled = true;
+  const selected = await selectSpreadsheet(id);
+  el.importSheetButton.disabled = !state.accessToken;
+  if (selected) {
+    if (!state.files.some((file) => file.id === id)) state.files.unshift({ id, name: el.sheetName.textContent || "Google Sheet đã import", canEdit: state.role === "editor" });
+    renderFileManager();
+    el.sheetLinkInput.value = "";
+    toast("Đã import file Google Sheet và ghi nhớ cho lần đăng nhập sau.");
+  }
+}
+
+async function requestDriveAccessAndLoad() {
+  if (!state.credential) return toast("Hãy đăng nhập Google trước.", true);
+  el.authorizeDriveButton.disabled = true;
+  setConnection("Đang xin quyền Drive…", "muted");
+  try {
+    await requestGoogleDriveAccess({ prompt: "consent" });
+    await loadFiles();
+    setConnection(state.spreadsheetId ? (state.role === "editor" ? "Đã kết nối · Editor" : "Đã kết nối · Viewer") : "Đã đăng nhập · chọn file", "muted");
+    if (!state.spreadsheetId && state.files[0]) await selectSpreadsheet(state.files[0].id);
+  } catch (error) {
+    setConnection("Đã đăng nhập · cần quyền Drive", "muted");
+    el.fileManagerMessage.textContent = `${error.message} Bạn vẫn có thể dùng nút này để cấp quyền lại.`;
+    toast(error.message, true);
+  } finally {
+    el.authorizeDriveButton.disabled = !state.credential;
   }
 }
 
@@ -262,14 +333,11 @@ async function handleCredential(response) {
   setConnection("Đang xác thực…", "muted");
   try {
     state.user = decodeCredential(response.credential);
-    await requestGoogleDriveAccess();
-    await loadFiles();
     state.demo = false;
-    enterApp(state.files[0]?.name || "Chưa chọn file 3DTR");
-    if (state.files[0]) await selectSpreadsheet(state.files[0].id);
+    enterApp("Chưa chọn file 3DTR");
+    el.fileManagerMessage.textContent = "Đăng nhập thành công. Bấm Cấp quyền Drive/Sheets để tải danh sách file bạn được chia sẻ.";
+    await requestDriveAccessAndLoad();
   } catch (error) {
-    state.credential = "";
-    state.accessToken = "";
     setConnection("Không có quyền", "muted");
     toast(error.message, true);
   }

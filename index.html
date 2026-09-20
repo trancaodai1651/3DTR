@@ -97,11 +97,20 @@
               <div><span>Google Drive</span><h3 id="fileManagerTitle">Chọn file dữ liệu 3DTR</h3></div>
               <span id="fileManagerRole" class="badge badge-muted">Chưa chọn</span>
             </div>
-            <p id="fileManagerMessage" class="microcopy">Chỉ sử dụng file có đủ cấu trúc chuẩn 3DTR. Bản sao tạo từ mẫu là độc lập, template cập nhật sau này không làm thay đổi dữ liệu của bạn.</p>
+            <p id="fileManagerMessage" class="microcopy">Đăng nhập Google rồi cấp quyền Drive/Sheets để 3DTR liệt kê các file bạn được chia sẻ. Người có quyền Editor mới ghi dữ liệu; Viewer chỉ xem.</p>
             <div class="file-manager-actions">
               <select id="sheetSelector" aria-label="Chọn Google Sheet"></select>
+              <button id="authorizeDriveButton" class="button button-secondary" type="button">Cấp quyền Drive/Sheets</button>
               <button id="createSheetButton" class="button button-primary" type="button">Tạo bản Google Sheet riêng</button>
               <a id="downloadTemplateButton" class="button button-secondary" href="downloads/3DTR_Quan_Ly_Kinh_Doanh_Thong_Minh.xlsx" download>Tải mẫu Excel</a>
+            </div>
+            <div class="file-import-row">
+              <label for="sheetLinkInput">Import file Google Sheet đã có</label>
+              <div class="file-import-controls">
+                <input id="sheetLinkInput" type="url" inputmode="url" placeholder="Dán link hoặc ID Google Sheet của bạn" autocomplete="off">
+                <button id="importSheetButton" class="button button-ghost" type="button">Import file</button>
+              </div>
+              <small>Quy trình nhanh: tải mẫu công khai, tải lên Drive và chọn “Mở bằng Google Sheets”, sau đó dán link vào đây. File được chia sẻ cho bạn sẽ xuất hiện trong danh sách sau khi cấp quyền.</small>
             </div>
           </section>
 

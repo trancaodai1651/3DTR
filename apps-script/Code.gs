@@ -62,7 +62,7 @@ function doPost(event) {
     const accessToken = input.accessToken ? verifyAccessToken_(input.accessToken, user.email) : "";
     if (["files", "createCopy"].includes(input.action) && !accessToken) throw new Error("Cần cấp quyền Google Drive để chọn hoặc khởi tạo file.");
     if (["dashboard", "records", "submit", "session"].includes(input.action) && input.spreadsheetId && !accessToken) throw new Error("Cần cấp quyền Google Sheets cho file đã chọn.");
-    if (input.spreadsheetId && accessToken) {
+    if (input.spreadsheetId && accessToken && ["dashboard", "records", "submit", "session"].includes(input.action)) {
       const selected = spreadsheetMetadata_(accessToken, input.spreadsheetId);
       const role = selected.role;
       if (input.action === "session") return json_({ ok: true, data: { user, role, spreadsheetName: selected.name, spreadsheetId: selected.id, standard: selected.standard, missingSheets: selected.missingSheets } });
