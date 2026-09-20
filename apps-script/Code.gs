@@ -1,7 +1,7 @@
 const ENTITY_CONFIG = Object.freeze({
   order: {
     sheet: "7_Đơn hàng", startRow: 4, keyColumn: 1,
-    required: ["orderCode", "orderDate", "salesChannel", "platform", "sku", "productName", "quantity", "unitPrice", "status"],
+    required: ["orderCode", "orderDate", "salesChannel", "platform", "status"],
     columns: [
       [1, "orderCode", "text"], [2, "orderDate", "date"], [3, "salesChannel", "text"], [4, "platform", "text"],
       [5, "sku", "text"], [6, "productName", "text"], [7, "customerId", "text"], [8, "quantity", "number"],
@@ -151,6 +151,7 @@ function records_(entityKey, requestedLimit) {
 }
 
 function submit_(entityKey, rawData, user) {
+  if (entityKey === "order" && rawData && Array.isArray(rawData.lineItems)) return submitOrder_(rawData, user);
   const cfg = entity_(entityKey);
   const data = rawData && typeof rawData === "object" ? rawData : {};
   cfg.required.forEach((key) => {
@@ -165,6 +166,46 @@ function submit_(entityKey, rawData, user) {
     sheet.getRange(row, cfg.keyColumn).setNote(`Nhập từ web bởi ${user.email} lúc ${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss")}`);
     SpreadsheetApp.flush();
     return { row, sheet: cfg.sheet, id: String(data[cfg.columns[0][1]]) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function submitOrder_(data, user) {
+  const cfg = entity_("order");
+  cfg.required.forEach((key) => {
+    if (data[key] === undefined || data[key] === null || String(data[key]).trim() === "") throw new Error(`Thiếu trường bắt buộc: ${key}.`);
+  });
+  if (!data.lineItems.length || data.lineItems.length > 50) throw new Error("Đơn hàng phải có từ 1 đến 50 dòng chi tiết.");
+  const sheet = spreadsheet_().getSheetByName(cfg.sheet);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const rows = [];
+    data.lineItems.forEach((line, index) => {
+      if (!line || String(line.productName || "").trim() === "") throw new Error(`Thiếu tên ở dòng chi tiết ${index + 1}.`);
+      if (!Number.isFinite(Number(line.quantity)) || Number(line.quantity) < 1) throw new Error(`Số lượng ở dòng ${index + 1} không hợp lệ.`);
+      if (!Number.isFinite(Number(line.unitPrice)) || Number(line.unitPrice) < 0) throw new Error(`Giá bán ở dòng ${index + 1} không hợp lệ.`);
+      const rowData = {
+        ...data,
+        ...line,
+        sku: line.sku || "",
+        productName: line.productName,
+        quantity: Number(line.quantity),
+        unitPrice: Number(line.unitPrice),
+        platformFee: index === 0 ? data.platformFee : 0,
+        otherPaymentFee: index === 0 ? data.otherPaymentFee : 0,
+        customerShipping: index === 0 ? data.customerShipping : 0,
+        sellerShipping: index === 0 ? data.sellerShipping : 0,
+        note: `[${line.itemType || "Sản phẩm"}] ${line.note || data.note || ""}`.trim(),
+      };
+      const row = firstEmptyRow_(sheet, cfg.startRow, cfg.keyColumn);
+      cfg.columns.forEach(([column, key, type]) => sheet.getRange(row, column).setValue(coerce_(rowData[key], type)));
+      sheet.getRange(row, cfg.keyColumn).setNote(`Nhập từ web bởi ${user.email} lúc ${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss")}`);
+      rows.push(row);
+    });
+    SpreadsheetApp.flush();
+    return { row: rows[0], rows, count: rows.length, sheet: cfg.sheet, id: String(data.orderCode) };
   } finally {
     lock.releaseLock();
   }
@@ -197,6 +238,7 @@ function coerce_(value, type) {
     return result;
   }
   if (type === "date") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value))) throw new Error("Ngày phải có định dạng YYYY-MM-DD và được chọn bằng lịch.");
     const result = new Date(`${String(value).slice(0, 10)}T00:00:00+07:00`);
     if (Number.isNaN(result.getTime())) throw new Error("Ngày không hợp lệ.");
     return result;

@@ -10,11 +10,7 @@ const entities = {
       field("orderDate", "Ngày đơn", "date", true),
       select("salesChannel", "Kênh bán", ["Sàn TMĐT", "Facebook", "Zalo", "Website", "Khách quen", "Khác"], true),
       select("platform", "Sàn/Nền tảng", ["TikTok Shop", "Shopee", "Lazada", "Facebook", "Zalo", "Website", "Khác"], true),
-      field("sku", "Mã sản phẩm", "text", true, "Mã trong sheet 9_Sản phẩm"),
-      field("productName", "Tên sản phẩm", "text", true),
       field("customerId", "Mã khách hàng", "text", false),
-      field("quantity", "Số lượng", "number", true, "1", { min: 1, step: 1 }),
-      field("unitPrice", "Giá bán/đơn vị", "number", true, "0", { min: 0, step: 1000 }),
       field("platformFee", "Phí sàn", "number", false, "0", { min: 0, step: 100 }),
       field("otherPaymentFee", "Phí thanh toán khác", "number", false, "0", { min: 0, step: 100 }),
       field("customerShipping", "Ship khách trả", "number", false, "0", { min: 0, step: 1000 }),
@@ -125,6 +121,7 @@ const state = {
   entity: "order",
   demo: false,
   dashboard: null,
+  orderLines: [newOrderLine()],
 };
 
 const el = Object.fromEntries([
@@ -251,6 +248,7 @@ function renderEntityControls() {
 }
 
 function renderForm() {
+  if (state.entity === "order") return renderOrderForm();
   el.formFields.innerHTML = "";
   entities[state.entity].fields.forEach((definition) => {
     const wrapper = document.createElement("div");
@@ -283,19 +281,129 @@ function renderForm() {
   el.formMessage.textContent = state.role === "viewer" ? "Tài khoản Viewer không thể gửi biểu mẫu." : "Các trường có dấu * là bắt buộc.";
 }
 
+function newOrderLine() {
+  return { itemType: "Sản phẩm", sku: "", productName: "", quantity: "1", unitPrice: "0", note: "" };
+}
+
+function renderOrderForm() {
+  el.formFields.innerHTML = "";
+  entities.order.fields.forEach((definition) => appendField(el.formFields, definition));
+  const heading = document.createElement("div");
+  heading.className = "order-lines-heading full";
+  heading.innerHTML = `<div><strong>Chi tiết đơn hàng</strong><small>Mỗi dòng là một sản phẩm, loại nhựa hoặc phụ kiện. Tất cả dùng chung mã đơn.</small></div><button type="button" class="button button-ghost" id="addOrderLine">+ Thêm dòng</button>`;
+  el.formFields.append(heading);
+  const lines = document.createElement("div");
+  lines.id = "orderLines";
+  lines.className = "order-lines full";
+  el.formFields.append(lines);
+  state.orderLines.forEach((line, index) => appendOrderLine(lines, line, index));
+  document.getElementById("addOrderLine").addEventListener("click", () => {
+    state.orderLines.push(newOrderLine());
+    renderOrderForm();
+  });
+  el.formMessage.className = "form-message";
+  el.formMessage.textContent = state.role === "viewer"
+    ? "Tài khoản Viewer không thể gửi biểu mẫu."
+    : "Ngày chỉ chọn bằng lịch. Phí sàn và phí vận chuyển chỉ ghi một lần ở dòng đầu tiên.";
+}
+
+function appendOrderLine(container, line, index) {
+  const card = document.createElement("div");
+  card.className = "order-line-card";
+  card.innerHTML = `<div class="order-line-title"><strong>Dòng ${index + 1}</strong>${index ? `<button type="button" class="text-button remove-order-line" data-index="${index}">Xóa</button>` : "<span>Dòng chính</span>"}</div>`;
+  const grid = document.createElement("div");
+  grid.className = "order-line-grid";
+  const definitions = [
+    select("itemType", "Loại dòng", ["Sản phẩm", "Nhựa", "Phụ kiện máy in"], true),
+    field("sku", "Mã SP / mã vật tư", "text", false, "VD: SP-LAMP-01"),
+    field("productName", "Tên sản phẩm / loại nhựa / phụ kiện", "text", true),
+    field("quantity", "Số lượng", "number", true, "1", { min: 1, step: 1 }),
+    field("unitPrice", "Giá bán dòng", "number", true, "0", { min: 0, step: 1000 }),
+    field("note", "Ghi chú dòng", "text", false, "Màu, size, yêu cầu riêng"),
+  ];
+  definitions.forEach((definition) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = `field${definition.key === "productName" || definition.key === "note" ? " wide" : ""}`;
+    const label = document.createElement("label");
+    label.htmlFor = `order-line-${definition.key}-${index}`;
+    label.innerHTML = `${escapeHtml(definition.label)}${definition.required ? "<i>*</i>" : ""}`;
+    let input;
+    if (definition.kind === "select") {
+      input = document.createElement("select");
+      input.innerHTML = `<option value="">Chọn…</option>${definition.options.map((value) => `<option>${escapeHtml(value)}</option>`).join("")}`;
+    } else {
+      input = document.createElement("input");
+      input.type = definition.type;
+      input.placeholder = definition.placeholder || "";
+      if (definition.min !== undefined) input.min = definition.min;
+      if (definition.step !== undefined) input.step = definition.step;
+    }
+    input.id = `order-line-${definition.key}-${index}`;
+    input.dataset.lineKey = definition.key;
+    input.dataset.lineIndex = String(index);
+    input.value = line[definition.key] ?? "";
+    input.required = Boolean(definition.required);
+    input.autocomplete = "off";
+    wrapper.append(label, input);
+    grid.append(wrapper);
+  });
+  card.append(grid);
+  container.append(card);
+  card.querySelectorAll("[data-line-key]").forEach((input) => input.addEventListener("input", () => {
+    state.orderLines[index][input.dataset.lineKey] = input.value;
+  }));
+  const remove = card.querySelector(".remove-order-line");
+  if (remove) remove.addEventListener("click", () => {
+    state.orderLines.splice(index, 1);
+    renderOrderForm();
+  });
+}
+
+function appendField(parent, definition) {
+  const wrapper = document.createElement("div");
+  wrapper.className = `field${definition.full ? " full" : definition.wide ? " wide" : ""}`;
+  const label = document.createElement("label");
+  label.htmlFor = `field-${definition.key}`;
+  label.innerHTML = `${escapeHtml(definition.label)}${definition.required ? "<i>*</i>" : ""}`;
+  let input;
+  if (definition.kind === "select") {
+    input = document.createElement("select");
+    input.innerHTML = `<option value="">Chọn…</option>${definition.options.map((value) => `<option>${escapeHtml(value)}</option>`).join("")}`;
+  } else if (definition.kind === "textarea") {
+    input = document.createElement("textarea");
+    input.placeholder = "Nhập ghi chú nếu có";
+  } else {
+    input = document.createElement("input");
+    input.type = definition.type;
+    input.placeholder = definition.placeholder || "";
+    if (definition.min !== undefined) input.min = definition.min;
+    if (definition.step !== undefined) input.step = definition.step;
+  }
+  input.id = `field-${definition.key}`;
+  input.name = definition.key;
+  input.required = Boolean(definition.required);
+  input.autocomplete = "off";
+  wrapper.append(label, input);
+  parent.append(wrapper);
+}
+
 async function submitEntry(event) {
   event.preventDefault();
   if (state.role !== "editor") return showFormMessage("Tài khoản của bạn chỉ có quyền xem.", true);
   if (!el.entryForm.reportValidity()) return;
-  const data = Object.fromEntries(new FormData(el.entryForm).entries());
+  const invalidDate = [...el.entryForm.querySelectorAll('input[type="date"]')].some((input) => input.value && !/^\d{4}-\d{2}-\d{2}$/.test(input.value));
+  if (invalidDate) return showFormMessage("Ngày không hợp lệ. Hãy chọn ngày bằng lịch.", true);
+  const data = state.entity === "order" ? buildOrderPayload() : Object.fromEntries(new FormData(el.entryForm).entries());
+  if (!data) return;
   const numberKeys = entities[state.entity].fields.filter((item) => item.type === "number").map((item) => item.key);
   numberKeys.forEach((key) => { if (data[key] !== "") data[key] = Number(data[key]); });
   el.submitButton.disabled = true;
   showFormMessage("Đang lưu dữ liệu…");
   try {
     const result = state.demo ? saveDemoRecord(state.entity, data) : await api("submit", { entity: state.entity, data });
-    showFormMessage(`Đã lưu ${entities[state.entity].label.toLowerCase()} tại dòng ${result.row}.`, false, true);
+    showFormMessage(`Đã lưu ${entities[state.entity].label.toLowerCase()} tại ${result.count || 1} dòng dữ liệu.`, false, true);
     el.entryForm.reset();
+    if (state.entity === "order") state.orderLines = [newOrderLine()];
     toast("Đã thêm dữ liệu thành công.");
     await refreshAll();
   } catch (error) {
@@ -304,6 +412,23 @@ async function submitEntry(event) {
   } finally {
     el.submitButton.disabled = state.role !== "editor";
   }
+}
+
+function buildOrderPayload() {
+  const shared = Object.fromEntries(new FormData(el.entryForm).entries());
+  const lines = state.orderLines.map((line) => ({ ...line }));
+  if (!lines.length || lines.some((line) => !String(line.productName).trim() || Number(line.quantity) < 1 || Number(line.unitPrice) < 0)) {
+    showFormMessage("Mỗi dòng đơn phải có tên, số lượng và giá bán hợp lệ.", true);
+    return null;
+  }
+  ["platformFee", "otherPaymentFee", "customerShipping", "sellerShipping"].forEach((key) => {
+    if (shared[key] !== "") shared[key] = Number(shared[key]);
+  });
+  lines.forEach((line) => {
+    line.quantity = Number(line.quantity);
+    line.unitPrice = Number(line.unitPrice);
+  });
+  return { ...shared, lineItems: lines };
 }
 
 async function refreshAll() {
@@ -396,9 +521,13 @@ function toast(message, isError = false) {
 function saveDemoRecord(entity, data) {
   const key = `3dtr-demo-${entity}`;
   const records = JSON.parse(localStorage.getItem(key) || "[]");
-  records.push({ ...data, _createdAt: new Date().toISOString() });
+  if (entity === "order" && Array.isArray(data.lineItems)) {
+    data.lineItems.forEach((line, index) => records.push({ ...data, ...line, lineItems: undefined, platformFee: index === 0 ? data.platformFee : 0, otherPaymentFee: index === 0 ? data.otherPaymentFee : 0, customerShipping: index === 0 ? data.customerShipping : 0, sellerShipping: index === 0 ? data.sellerShipping : 0, _createdAt: new Date().toISOString() }));
+  } else {
+    records.push({ ...data, _createdAt: new Date().toISOString() });
+  }
   localStorage.setItem(key, JSON.stringify(records.slice(-50)));
-  return { row: records.length + 3 };
+  return { row: records.length + 3, count: entity === "order" && Array.isArray(data.lineItems) ? data.lineItems.length : 1 };
 }
 
 function demoRecords(entity) {
