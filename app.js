@@ -258,6 +258,9 @@ function renderFileManager() {
 async function selectSpreadsheet(spreadsheetId) {
   if (!spreadsheetId) return;
   try {
+    if (spreadsheetId === config.templateSpreadsheetId) {
+      throw new Error("Đây là mẫu Google Sheet công khai chỉ xem. Hãy bấm Tạo bản Google Sheet riêng hoặc import một bản sao có quyền Editor.");
+    }
     const session = await api("session", { spreadsheetId });
     if (!session.standard) throw new Error("File không đúng cấu trúc chuẩn 3DTR.");
     state.spreadsheetId = spreadsheetId;
@@ -299,6 +302,23 @@ async function importSheet() {
     if (!state.accessToken) return;
   }
   el.importSheetButton.disabled = true;
+  if (id === config.templateSpreadsheetId) {
+    try {
+      const name = `3DTR - ${state.user?.name || "Bản riêng"} - ${new Date().toISOString().slice(0, 10)}`;
+      const created = await api("createCopy", { templateId: config.templateSpreadsheetId, name });
+      await loadFiles();
+      const selectedCopy = await selectSpreadsheet(created.id);
+      if (selectedCopy) {
+        el.sheetLinkInput.value = "";
+        toast("Đây là mẫu công khai nên 3DTR đã tạo bản Google Sheet riêng có quyền Editor trong Drive của bạn.");
+      }
+    } catch (error) {
+      toast(error.message, true);
+    } finally {
+      el.importSheetButton.disabled = !state.credential;
+    }
+    return;
+  }
   let imported;
   try {
     imported = await api("importFile", { fileId: id });

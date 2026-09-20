@@ -15,7 +15,7 @@
 - Apps Script xác minh Google ID token, kiểm tra quyền file và chỉ ghi vào các cột đầu vào; cột công thức không bị ghi đè.
 - Người dùng có thể cấp quyền Drive/Sheets để chọn nhiều file Google Sheets; ứng dụng chỉ nhận file có đủ 15 sheet chuẩn.
 - Nếu chưa có file, nút **Tạo bản Google Sheet riêng** sẽ copy template một lần vào My Drive của người dùng. Bản copy độc lập, không liên kết công thức với template.
-- Mẫu Google Sheet công khai: `https://docs.google.com/spreadsheets/d/18kfPoZHh99cAADm0leUjzxeiWg2SmE_bW-ixNHoDleI/edit`. **Import file** nhận link Google Sheet hoặc link file Excel `.xlsx/.xls` trong Google Drive; Excel được tải bằng quyền của người dùng và chuyển thành một Google Sheet 3DTR riêng, file gốc không bị thay đổi.
+- Mẫu Google Sheet công khai: `https://docs.google.com/spreadsheets/d/18kfPoZHh99cAADm0leUjzxeiWg2SmE_bW-ixNHoDleI/edit`. **Import file** nhận link Google Sheet hoặc link file Excel `.xlsx/.xls` trong Google Drive; Excel được tải bằng quyền của người dùng và chuyển thành một Google Sheet 3DTR riêng, file gốc không bị thay đổi. Nếu dán đúng link mẫu công khai, hệ thống tự tạo bản riêng có quyền Editor thay vì chọn mẫu Viewer.
 - Sau khi đăng nhập và cấp quyền Drive/Sheets, danh sách gồm toàn bộ Google Sheet mà tài khoản đang được cấp quyền sẽ hiển thị. File A được chia sẻ cho tài khoản B sẽ xuất hiện ở B; quyền Editor được ghi, quyền Viewer chỉ xem. File đã import được ghi nhớ cục bộ theo email để hiện lại ở lần đăng nhập sau.
 
 Template không xuất hiện trong danh sách file làm việc, chỉ các bản sao/file chuẩn của người dùng mới được chọn. Cập nhật template sau này không thay đổi các bản copy đã tạo hoặc dữ liệu file đã import.
