@@ -190,6 +190,12 @@ function requestGoogleDriveAccess({ prompt = "consent" } = {}) {
   return new Promise((resolve, reject) => {
     if (!window.google?.accounts?.oauth2) return reject(new Error("Google OAuth chưa sẵn sàng. Hãy tải lại trang."));
     let settled = false;
+    const fail = (message) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      reject(new Error(message));
+    };
     const timeout = window.setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -200,12 +206,13 @@ function requestGoogleDriveAccess({ prompt = "consent" } = {}) {
       scope: config.driveScopes || "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
       callback: (response) => {
         if (settled) return;
+        if (response.error) return fail(response.error === "access_denied" ? "Bạn chưa cấp quyền Google Drive/Sheets cho 3DTR." : "Không thể cấp quyền Google Drive/Sheets cho 3DTR.");
         settled = true;
         window.clearTimeout(timeout);
-        if (response.error) return reject(new Error(response.error === "access_denied" ? "Bạn chưa cấp quyền Google Drive/Sheets cho 3DTR." : "Không thể cấp quyền Google Drive/Sheets cho 3DTR."));
         state.accessToken = response.access_token;
         resolve(response);
       },
+      error_callback: (error) => fail(error?.type === "popup_failed_to_open" ? "Trình duyệt đang chặn cửa sổ Google. Hãy cho phép popup cho GitHub Pages rồi bấm lại." : "Không thể mở cửa sổ cấp quyền Google Drive/Sheets."),
     });
     state.oauthClient.requestAccessToken({ prompt });
   });
