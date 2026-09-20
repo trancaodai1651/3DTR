@@ -471,6 +471,8 @@ function bindPurchaseColorField() {
     colorField.classList.toggle("hidden", !isFilament);
     color.required = isFilament;
     color.setAttribute("aria-required", String(isFilament));
+    const label = colorField.querySelector("label");
+    if (label) label.innerHTML = `${escapeHtml("Màu nhựa")}${isFilament ? "<i>*</i>" : ""}`;
     if (!isFilament) color.value = "";
   };
   category.addEventListener("change", sync);
