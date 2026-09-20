@@ -15,6 +15,8 @@
 - Người dùng có thể cấp quyền Drive/Sheets để chọn nhiều file Google Sheets; ứng dụng chỉ nhận file có đủ 15 sheet chuẩn.
 - Nếu chưa có file, nút **Tạo bản Google Sheet riêng** sẽ copy template một lần vào My Drive của người dùng. Bản copy độc lập, không liên kết công thức với template.
 
+Người dùng cần được cấp tối thiểu quyền Viewer trên file template để Google Drive cho phép tạo bản sao; file template không xuất hiện trong danh sách file làm việc, chỉ các bản sao/file chuẩn của người dùng mới được chọn.
+
 Workbook hoàn chỉnh nằm tại `downloads/3DTR_Quan_Ly_Kinh_Doanh_Thong_Minh.xlsx`.
 
 ## Chạy giao diện demo
