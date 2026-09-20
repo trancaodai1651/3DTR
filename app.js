@@ -339,8 +339,8 @@ async function handleCredential(response) {
     state.user = decodeCredential(response.credential);
     state.demo = false;
     enterApp("Chưa chọn file 3DTR");
-    el.fileManagerMessage.textContent = "Đăng nhập thành công. Bấm Cấp quyền Drive/Sheets để tải danh sách file bạn được chia sẻ.";
-    await requestDriveAccessAndLoad();
+    setConnection("Đã đăng nhập · cần quyền Drive", "muted");
+    el.fileManagerMessage.textContent = "Đăng nhập thành công. Bấm Cấp quyền Drive/Sheets để tải danh sách file bạn được chia sẻ, hoặc bấm Import file để cấp quyền khi cần.";
   } catch (error) {
     setConnection("Không có quyền", "muted");
     toast(error.message, true);
