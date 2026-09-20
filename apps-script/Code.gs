@@ -49,6 +49,12 @@ const STANDARD_SHEETS = Object.freeze([
 ]);
 
 const DRIVE_SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
+const EXCEL_MIMES = Object.freeze([
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-excel.sheet.macroEnabled.12",
+  "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+]);
 const OAUTH_SCOPES = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets";
 
 function doGet() {
@@ -60,7 +66,7 @@ function doPost(event) {
     const input = parseInput_(event);
     const user = verifyGoogleToken_(input.token);
     const accessToken = input.accessToken ? verifyAccessToken_(input.accessToken, user.email) : "";
-    if (["files", "createCopy"].includes(input.action) && !accessToken) throw new Error("Cần cấp quyền Google Drive để chọn hoặc khởi tạo file.");
+    if (["files", "createCopy", "importFile"].includes(input.action) && !accessToken) throw new Error("Cần cấp quyền Google Drive để chọn, import hoặc khởi tạo file.");
     if (["dashboard", "records", "submit", "session"].includes(input.action) && input.spreadsheetId && !accessToken) throw new Error("Cần cấp quyền Google Sheets cho file đã chọn.");
     if (input.spreadsheetId && accessToken && ["dashboard", "records", "submit", "session"].includes(input.action)) {
       const selected = spreadsheetMetadata_(accessToken, input.spreadsheetId);
@@ -81,6 +87,7 @@ function doPost(event) {
     }
     if (input.action === "files") return json_({ ok: true, data: listSpreadsheets_(accessToken) });
     if (input.action === "createCopy") return json_({ ok: true, data: createTemplateCopy_(accessToken, input.templateId, input.name) });
+    if (input.action === "importFile") return json_({ ok: true, data: importDriveFile_(accessToken, input.fileId, input.name) });
     const role = getFileRole_(user.email);
     if (role === "none") throw new Error("Tài khoản chưa được cấp quyền trên Google Sheet 3DTR.");
 
@@ -147,6 +154,48 @@ function createTemplateCopy_(accessToken, templateId, requestedName) {
   return googleApi_(accessToken, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(templateId)}/copy?supportsAllDrives=true`, {
     method: "post", contentType: "application/json", payload: JSON.stringify({ name, appProperties: { threeDtrTemplateId: templateId, threeDtrTemplateVersion: new Date().toISOString() } }),
   });
+}
+
+function importDriveFile_(accessToken, fileId, requestedName) {
+  const id = String(fileId || "").trim();
+  if (!id) throw new Error("Thiếu ID file Google Drive.");
+  const fields = encodeURIComponent("id,name,mimeType,size,modifiedTime,webViewLink,capabilities(canEdit,canComment,canDownload),owners(emailAddress)");
+  const source = googleApi_(accessToken, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=${fields}`);
+  if (source.mimeType === DRIVE_SPREADSHEET_MIME) {
+    return { id: source.id, name: source.name, mimeType: source.mimeType, convertedFromExcel: false, webViewLink: source.webViewLink || `https://docs.google.com/spreadsheets/d/${source.id}/edit` };
+  }
+  if (!EXCEL_MIMES.includes(source.mimeType)) {
+    throw new Error("Link này không phải Google Sheet hoặc file Excel .xlsx/.xls trong Google Drive.");
+  }
+  if (source.capabilities && source.capabilities.canDownload === false) throw new Error("File Excel không cho phép tải xuống. Hãy bật quyền tải xuống hoặc chia sẻ file cho tài khoản đang đăng nhập.");
+  const download = UrlFetchApp.fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&supportsAllDrives=true`, {
+    muteHttpExceptions: true,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (download.getResponseCode() < 200 || download.getResponseCode() >= 300) {
+    let message = download.getContentText();
+    try { message = JSON.parse(message).error.message || message; } catch (error) {}
+    throw new Error(`Không thể đọc file Excel từ Google Drive: ${message}`);
+  }
+  const sourceName = String(requestedName || source.name || "3DTR import").trim();
+  const name = sourceName.replace(/\.(xlsx|xls|xlsm|xlsb)$/i, "") || "3DTR import";
+  const boundary = `3dtr-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const contentType = `multipart/related; boundary=${boundary}`;
+  const metadata = {
+    name: `${name} (Google Sheet)`,
+    mimeType: DRIVE_SPREADSHEET_MIME,
+    appProperties: { threeDtrImportedFrom: source.id, threeDtrImportedAt: new Date().toISOString() },
+  };
+  const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${source.mimeType}\r\n\r\n`;
+  const suffix = `\r\n--${boundary}--`;
+  const payload = Utilities.newBlob(prefix).getBytes().concat(download.getBlob().getBytes(), Utilities.newBlob(suffix).getBytes());
+  const converted = googleApi_(accessToken, "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,modifiedTime,webViewLink,capabilities(canEdit,canComment),owners(emailAddress)", {
+    method: "post", contentType, payload,
+  });
+  if (!converted.id) throw new Error("Google Drive không trả về file Google Sheet sau khi chuyển Excel.");
+  // Check the 3DTR structure before returning the imported file. The converted file is intentionally kept in Drive so the user can repair it if a sheet is missing.
+  spreadsheetMetadata_(accessToken, converted.id);
+  return { id: converted.id, name: converted.name, mimeType: DRIVE_SPREADSHEET_MIME, convertedFromExcel: true, sourceFileId: source.id, webViewLink: converted.webViewLink || `https://docs.google.com/spreadsheets/d/${converted.id}/edit`, canEdit: Boolean(converted.capabilities && converted.capabilities.canEdit) };
 }
 
 function spreadsheetMetadata_(accessToken, spreadsheetId) {

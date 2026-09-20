@@ -239,7 +239,7 @@ async function loadFiles() {
   const known = new Set(state.files.map((file) => file.id));
   rememberedFileIds().filter((id) => !known.has(id)).forEach((id) => state.files.push({ id, name: "File đã import — chọn để kiểm tra", canEdit: false, remembered: true }));
   renderFileManager();
-  if (!state.files.length) el.fileManagerMessage.textContent = "Chưa có Google Sheet nào được cấp quyền. Hãy tải mẫu công khai, chuyển thành Google Sheet rồi dán link để import, hoặc bấm Tạo bản Google Sheet riêng.";
+  if (!state.files.length) el.fileManagerMessage.textContent = "Chưa có Google Sheet nào được cấp quyền. Bạn có thể dán link Google Sheet hoặc link Excel trong Drive để import, hoặc bấm Tạo bản Google Sheet riêng.";
 }
 
 function renderFileManager() {
@@ -282,27 +282,39 @@ async function selectSpreadsheet(spreadsheetId) {
   }
 }
 
-function extractSpreadsheetId(value) {
+function extractDriveFileId(value) {
   const input = String(value || "").trim();
-  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || input.match(/^([a-zA-Z0-9_-]{20,})$/);
+  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+    || input.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
+    || input.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    || input.match(/^([a-zA-Z0-9_-]{20,})$/);
   return match ? match[1] : "";
 }
 
 async function importSheet() {
-  const id = extractSpreadsheetId(el.sheetLinkInput.value);
-  if (!id) return toast("Hãy dán link Google Sheet hoặc ID file hợp lệ.", true);
+  const id = extractDriveFileId(el.sheetLinkInput.value);
+  if (!id) return toast("Hãy dán link Google Sheet hoặc link Excel .xlsx/.xls trong Google Drive.", true);
   if (!state.accessToken) {
     await requestDriveAccessAndLoad();
     if (!state.accessToken) return;
   }
   el.importSheetButton.disabled = true;
-  const selected = await selectSpreadsheet(id);
+  let imported;
+  try {
+    imported = await api("importFile", { fileId: id });
+  } catch (error) {
+    el.importSheetButton.disabled = !state.credential;
+    toast(error.message, true);
+    return;
+  }
+  const selected = await selectSpreadsheet(imported.id);
   el.importSheetButton.disabled = !state.credential;
   if (selected) {
-    if (!state.files.some((file) => file.id === id)) state.files.unshift({ id, name: el.sheetName.textContent || "Google Sheet đã import", canEdit: state.role === "editor" });
+    if (!state.files.some((file) => file.id === imported.id)) state.files.unshift({ id: imported.id, name: imported.name || el.sheetName.textContent || "Google Sheet đã import", canEdit: state.role === "editor" });
     renderFileManager();
     el.sheetLinkInput.value = "";
-    toast("Đã import file Google Sheet và ghi nhớ cho lần đăng nhập sau.");
+    toast(imported.convertedFromExcel
+      ? "Đã chuyển Excel thành Google Sheet 3DTR trong Drive của bạn và ghi nhớ file.": "Đã import Google Sheet và ghi nhớ cho lần đăng nhập sau.");
   }
 }
 
