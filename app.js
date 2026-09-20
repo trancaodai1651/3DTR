@@ -229,6 +229,7 @@ async function selectSpreadsheet(spreadsheetId) {
     el.roleBadge.textContent = state.role === "editor" ? "Editor" : "Viewer";
     el.entryPermission.textContent = state.role === "editor" ? "Có quyền chỉnh sửa" : "Chỉ xem";
     el.submitButton.disabled = state.role !== "editor";
+    renderForm();
     setConnection(state.role === "editor" ? "Đã kết nối · Editor" : "Đã kết nối · Viewer", state.role);
     renderFileManager();
     await refreshAll();
