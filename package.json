@@ -1,0 +1,9 @@
+{
+  "name": "3dtr",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check app.js && node tests/validate.mjs"
+  }
+}

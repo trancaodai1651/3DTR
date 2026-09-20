@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#071a18" />
+    <meta name="description" content="3DTR — quản lý cost, đơn hàng, khách hàng, kho nhựa và lợi nhuận 3D print." />
+    <title>3DTR — Quản lý kinh doanh 3D Print</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://accounts.google.com" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="config.js"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="Trang chủ 3DTR">
+        <span class="brand-mark" aria-hidden="true">3D</span>
+        <span>
+          <strong>3DTR</strong>
+          <small>Print business workspace</small>
+        </span>
+      </a>
+      <div class="header-actions">
+        <span id="connectionBadge" class="badge badge-muted">Chưa kết nối</span>
+        <button id="logoutButton" class="button button-ghost hidden" type="button">Đăng xuất</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="welcomeView" class="welcome-view">
+        <div class="hero-copy">
+          <p class="eyebrow">Một nguồn dữ liệu. Mọi thiết bị.</p>
+          <h1>Quản lý xưởng 3D print rõ ràng hơn mỗi ngày.</h1>
+          <p class="hero-text">
+            Theo dõi giá thành, sản phẩm, đơn hàng, khách hàng, tồn kho nhựa và lợi nhuận từ điện thoại hoặc máy tính. Dữ liệu được ghi trực tiếp vào Google Sheets theo đúng quyền của tài khoản đăng nhập.
+          </p>
+          <div class="hero-actions">
+            <div id="googleSignIn"></div>
+            <button id="demoButton" class="button button-secondary" type="button">Xem giao diện demo</button>
+          </div>
+          <p id="configHint" class="microcopy"></p>
+        </div>
+
+        <div class="hero-panel" aria-label="Tóm tắt tính năng">
+          <div class="hero-panel-head">
+            <span class="live-dot"></span>
+            <span>Hệ thống 3DTR</span>
+            <span class="hero-role">Phân quyền Google</span>
+          </div>
+          <div class="hero-stat-grid">
+            <article><span>Giá thành</span><strong>Tự tính</strong><small>Nhựa, điện, nhân công, phí sàn</small></article>
+            <article><span>Quyền Editor</span><strong>Được ghi</strong><small>API kiểm tra quyền trên file</small></article>
+            <article><span>Quyền Viewer</span><strong>Chỉ xem</strong><small>Không thể gửi biểu mẫu</small></article>
+            <article><span>Thiết bị</span><strong>Responsive</strong><small>Mobile, tablet và desktop</small></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="appView" class="app-view hidden" aria-live="polite">
+        <aside class="sidebar">
+          <div class="user-card">
+            <div id="userAvatar" class="avatar">3D</div>
+            <div>
+              <strong id="userName">Người dùng</strong>
+              <span id="userEmail">—</span>
+            </div>
+            <span id="roleBadge" class="role-badge">Viewer</span>
+          </div>
+          <nav class="main-nav" aria-label="Điều hướng chính">
+            <button class="nav-item active" data-view="dashboard" type="button"><span>01</span>Tổng quan</button>
+            <button class="nav-item" data-view="entry" type="button"><span>02</span>Nhập dữ liệu</button>
+            <button class="nav-item" data-view="records" type="button"><span>03</span>Dữ liệu gần đây</button>
+            <button class="nav-item" data-view="guide" type="button"><span>04</span>Hướng dẫn</button>
+          </nav>
+          <div class="sidebar-note">
+            <strong id="sheetName">Google Sheet 3DTR</strong>
+            <span>Quyền ghi được kiểm tra lại ở máy chủ cho từng yêu cầu.</span>
+          </div>
+        </aside>
+
+        <div class="workspace">
+          <div id="demoBanner" class="notice notice-warning hidden">
+            Đây là chế độ demo. Dữ liệu chỉ lưu tạm trên thiết bị và không gửi lên Google Sheets.
+          </div>
+          <div id="viewerBanner" class="notice hidden">
+            Tài khoản có quyền xem. Bạn có thể theo dõi dữ liệu nhưng không thể thêm bản ghi.
+          </div>
+
+          <section id="dashboardPanel" class="panel-view">
+            <div class="panel-heading">
+              <div><p class="eyebrow">Tổng quan</p><h2>Tình hình kinh doanh</h2></div>
+              <button id="refreshButton" class="button button-ghost" type="button">Làm mới</button>
+            </div>
+            <div id="kpiGrid" class="kpi-grid"></div>
+            <div class="dashboard-grid">
+              <article class="card chart-card">
+                <div class="card-heading"><div><span>Theo kênh</span><h3>Doanh thu và lợi nhuận</h3></div></div>
+                <div id="channelChart" class="bar-chart"></div>
+              </article>
+              <article class="card recent-card">
+                <div class="card-heading"><div><span>Mới nhất</span><h3>Đơn hàng gần đây</h3></div><button class="text-button" data-go="records" type="button">Xem tất cả</button></div>
+                <div id="dashboardRecent" class="compact-list"></div>
+              </article>
+            </div>
+          </section>
+
+          <section id="entryPanel" class="panel-view hidden">
+            <div class="panel-heading">
+              <div><p class="eyebrow">Nhập dữ liệu</p><h2>Thêm bản ghi mới</h2></div>
+              <span id="entryPermission" class="badge">Editor</span>
+            </div>
+            <div class="entity-tabs" id="entityTabs"></div>
+            <form id="entryForm" class="entry-form" novalidate>
+              <div id="formFields" class="form-grid"></div>
+              <div class="form-footer">
+                <p id="formMessage" class="form-message">Các trường có dấu * là bắt buộc.</p>
+                <button id="submitButton" class="button button-primary" type="submit">Thêm vào Google Sheets</button>
+              </div>
+            </form>
+          </section>
+
+          <section id="recordsPanel" class="panel-view hidden">
+            <div class="panel-heading">
+              <div><p class="eyebrow">Dữ liệu</p><h2>Bản ghi gần đây</h2></div>
+              <select id="recordEntity" class="select-inline" aria-label="Chọn loại dữ liệu"></select>
+            </div>
+            <div class="table-card">
+              <div class="table-scroll"><table><thead id="recordsHead"></thead><tbody id="recordsBody"></tbody></table></div>
+              <div id="recordsEmpty" class="empty-state hidden">Chưa có dữ liệu.</div>
+            </div>
+          </section>
+
+          <section id="guidePanel" class="panel-view hidden">
+            <div class="panel-heading"><div><p class="eyebrow">Hướng dẫn</p><h2>Quyền truy cập và luồng dữ liệu</h2></div></div>
+            <div class="guide-grid">
+              <article class="card guide-card"><span>01</span><h3>Đăng nhập Google</h3><p>Website nhận ID token từ Google Identity Services. Không lưu mật khẩu và không có client secret ở trình duyệt.</p></article>
+              <article class="card guide-card"><span>02</span><h3>Kiểm tra quyền file</h3><p>Apps Script xác minh token rồi kiểm tra tài khoản là Owner, Editor hay Viewer của Google Sheet.</p></article>
+              <article class="card guide-card"><span>03</span><h3>Ghi dữ liệu an toàn</h3><p>Chỉ Editor được gửi bản ghi. Viewer nhận phản hồi từ chối ở API dù có tự mở DevTools hay sửa giao diện.</p></article>
+              <article class="card guide-card"><span>04</span><h3>Công thức tự chạy</h3><p>Dữ liệu được ghi vào đúng cột nhập. Các cột doanh thu, COST và lợi nhuận vẫn do công thức trong Sheet tính.</p></article>
+            </div>
+            <article class="card setup-card">
+              <div><span>Triển khai</span><h3>Hoàn tất kết nối trong 4 bước</h3></div>
+              <ol><li>Nhập workbook 3DTR vào Google Drive và chuyển thành Google Sheets.</li><li>Triển khai <code>apps-script/Code.gs</code> dưới dạng Web app chạy bằng tài khoản chủ file.</li><li>Tạo OAuth Web Client, thêm URL GitHub Pages vào Authorized JavaScript origins.</li><li>Điền Client ID và URL Web app trong <code>config.js</code>, rồi tải lại trang.</li></ol>
+            </article>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

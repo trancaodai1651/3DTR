@@ -1,0 +1,12 @@
+{
+  "name": "3DTR — Quản lý kinh doanh 3D Print",
+  "short_name": "3DTR",
+  "lang": "vi",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f8f6",
+  "theme_color": "#071a18",
+  "icons": [
+    { "src": "assets/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
