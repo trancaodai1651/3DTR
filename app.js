@@ -133,12 +133,13 @@ const el = Object.fromEntries([
   "userAvatar", "userName", "userEmail", "roleBadge", "sheetName", "demoBanner", "viewerBanner", "entryPermission",
   "kpiGrid", "channelChart", "dashboardRecent", "refreshButton", "entityTabs", "entryForm", "formFields", "formMessage",
   "submitButton", "recordEntity", "recordsHead", "recordsBody", "recordsEmpty", "toast",
-  "fileManager", "fileManagerMessage", "fileManagerRole", "sheetSelector", "authorizeDriveButton", "createSheetButton", "downloadTemplateButton", "sheetLinkInput", "importSheetButton",
+  "fileManager", "fileManagerMessage", "fileManagerRole", "sheetSelector", "authorizeDriveButton", "createSheetButton", "openTemplateButton", "downloadTemplateButton", "sheetLinkInput", "importSheetButton",
 ].map((id) => [id, document.getElementById(id)]));
 
 document.addEventListener("DOMContentLoaded", init);
 
 function init() {
+  if (config.templateUrl) el.openTemplateButton.href = config.templateUrl;
   renderEntityControls();
   renderForm();
   bindEvents();
