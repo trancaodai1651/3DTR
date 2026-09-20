@@ -116,6 +116,10 @@ const entities = {
 
 const state = {
   credential: "",
+  accessToken: "",
+  oauthClient: null,
+  files: [],
+  spreadsheetId: "",
   role: "none",
   user: null,
   entity: "order",
@@ -129,6 +133,7 @@ const el = Object.fromEntries([
   "userAvatar", "userName", "userEmail", "roleBadge", "sheetName", "demoBanner", "viewerBanner", "entryPermission",
   "kpiGrid", "channelChart", "dashboardRecent", "refreshButton", "entityTabs", "entryForm", "formFields", "formMessage",
   "submitButton", "recordEntity", "recordsHead", "recordsBody", "recordsEmpty", "toast",
+  "fileManager", "fileManagerMessage", "fileManagerRole", "sheetSelector", "createSheetButton", "downloadTemplateButton",
 ].map((id) => [id, document.getElementById(id)]));
 
 document.addEventListener("DOMContentLoaded", init);
@@ -160,25 +165,110 @@ function bindEvents() {
   el.demoButton.addEventListener("click", enterDemo);
   el.logoutButton.addEventListener("click", logout);
   el.refreshButton.addEventListener("click", refreshAll);
+  el.sheetSelector.addEventListener("change", () => selectSpreadsheet(el.sheetSelector.value));
+  el.createSheetButton.addEventListener("click", createPersonalSheet);
   el.entryForm.addEventListener("submit", submitEntry);
   el.recordEntity.addEventListener("change", loadRecords);
   document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => showPanel(button.dataset.view)));
   document.querySelectorAll("[data-go]").forEach((button) => button.addEventListener("click", () => showPanel(button.dataset.go)));
 }
 
+function decodeCredential(token) {
+  try {
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const claims = JSON.parse(decodeURIComponent(atob(payload).split("").map((char) => `%${(`00${char.charCodeAt(0).toString(16)}`).slice(-2)}`).join("")));
+    return { name: claims.name || claims.email || "Người dùng Google", email: claims.email || "", picture: claims.picture || "" };
+  } catch (error) {
+    return { name: "Người dùng Google", email: "", picture: "" };
+  }
+}
+
+function requestGoogleDriveAccess() {
+  return new Promise((resolve, reject) => {
+    if (!window.google?.accounts?.oauth2) return reject(new Error("Google OAuth chưa sẵn sàng. Hãy tải lại trang."));
+    state.oauthClient = google.accounts.oauth2.initTokenClient({
+      client_id: config.googleClientId,
+      scope: config.driveScopes || "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
+      callback: (response) => {
+        if (response.error) return reject(new Error("Bạn chưa cấp quyền Google Drive/Sheets cho 3DTR."));
+        state.accessToken = response.access_token;
+        resolve(response);
+      },
+    });
+    state.oauthClient.requestAccessToken({ prompt: "consent" });
+  });
+}
+
+async function loadFiles() {
+  const files = await api("files");
+  state.files = Array.isArray(files) ? files : [];
+  renderFileManager();
+  if (!state.files.length) el.fileManagerMessage.textContent = "Chưa có Google Sheet nào được cấp quyền. Hãy tải mẫu và bấm Tạo bản Google Sheet riêng; bản sao sẽ nằm trong Drive của bạn và không liên kết ngược với template.";
+}
+
+function renderFileManager() {
+  if (!el.sheetSelector) return;
+  el.sheetSelector.innerHTML = state.files.length
+    ? state.files.map((file) => `<option value="${escapeHtml(file.id)}">${escapeHtml(file.name)}${file.canEdit ? " · Editor" : " · Viewer"}</option>`).join("")
+    : "<option value=\"\">Chưa có file Google Sheet chuẩn</option>";
+  el.sheetSelector.value = state.spreadsheetId || state.files[0]?.id || "";
+  el.fileManagerRole.textContent = state.role === "editor" ? "Editor" : state.role === "viewer" ? "Viewer" : "Chưa chọn";
+  el.fileManagerRole.className = `badge${state.role === "none" ? " badge-muted" : ""}`;
+  el.createSheetButton.disabled = !state.accessToken;
+}
+
+async function selectSpreadsheet(spreadsheetId) {
+  if (!spreadsheetId) return;
+  try {
+    const session = await api("session", { spreadsheetId });
+    if (!session.standard) throw new Error("File không đúng cấu trúc chuẩn 3DTR.");
+    state.spreadsheetId = spreadsheetId;
+    state.role = session.role;
+    el.sheetName.textContent = session.spreadsheetName || state.files.find((file) => file.id === spreadsheetId)?.name || "Google Sheet 3DTR";
+    el.viewerBanner.classList.toggle("hidden", state.role !== "viewer");
+    el.roleBadge.textContent = state.role === "editor" ? "Editor" : "Viewer";
+    el.entryPermission.textContent = state.role === "editor" ? "Có quyền chỉnh sửa" : "Chỉ xem";
+    el.submitButton.disabled = state.role !== "editor";
+    setConnection(state.role === "editor" ? "Đã kết nối · Editor" : "Đã kết nối · Viewer", state.role);
+    renderFileManager();
+    await refreshAll();
+  } catch (error) {
+    state.role = "none";
+    renderFileManager();
+    toast(error.message, true);
+    el.fileManagerMessage.textContent = `${error.message} Chỉ file có đủ 15 sheet chuẩn mới được sử dụng.`;
+  }
+}
+
+async function createPersonalSheet() {
+  if (!state.accessToken) return toast("Hãy đăng nhập và cấp quyền Google Drive trước.", true);
+  el.createSheetButton.disabled = true;
+  try {
+    const name = `3DTR - ${state.user?.name || "Bản riêng"} - ${new Date().toISOString().slice(0, 10)}`;
+    const created = await api("createCopy", { templateId: config.templateSpreadsheetId, name });
+    await loadFiles();
+    await selectSpreadsheet(created.id);
+    toast("Đã tạo bản Google Sheet riêng trong Drive của bạn.");
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    el.createSheetButton.disabled = !state.accessToken;
+  }
+}
+
 async function handleCredential(response) {
   state.credential = response.credential;
   setConnection("Đang xác thực…", "muted");
   try {
-    const session = await api("session");
-    if (session.role === "none") throw new Error("Tài khoản chưa được cấp quyền trên Google Sheet 3DTR.");
-    state.role = session.role;
-    state.user = session.user;
+    state.user = decodeCredential(response.credential);
+    await requestGoogleDriveAccess();
+    await loadFiles();
     state.demo = false;
-    enterApp(session.spreadsheetName || config.spreadsheetName);
-    await refreshAll();
+    enterApp(state.files[0]?.name || "Chưa chọn file 3DTR");
+    if (state.files[0]) await selectSpreadsheet(state.files[0].id);
   } catch (error) {
     state.credential = "";
+    state.accessToken = "";
     setConnection("Không có quyền", "muted");
     toast(error.message, true);
   }
@@ -189,6 +279,7 @@ function enterDemo() {
   state.role = "editor";
   state.user = { name: "Người dùng Demo", email: "demo@3dtr.local", picture: "" };
   enterApp("3DTR Demo");
+  el.fileManager.classList.add("hidden");
   state.dashboard = demoDashboard();
   renderDashboard(state.dashboard);
   loadRecords();
@@ -210,10 +301,15 @@ function enterApp(sheetName) {
   el.submitButton.textContent = state.demo ? "Lưu bản demo" : "Thêm vào Google Sheets";
   setConnection(state.demo ? "Chế độ demo" : state.role === "editor" ? "Đã kết nối · Editor" : "Đã kết nối · Viewer", state.role);
   renderForm();
+  el.fileManager.classList.remove("hidden");
+  renderFileManager();
 }
 
 function logout() {
   state.credential = "";
+  state.accessToken = "";
+  state.files = [];
+  state.spreadsheetId = "";
   state.role = "none";
   state.user = null;
   state.demo = false;
@@ -221,6 +317,7 @@ function logout() {
   el.appView.classList.add("hidden");
   el.welcomeView.classList.remove("hidden");
   el.logoutButton.classList.add("hidden");
+  el.fileManager.classList.add("hidden");
   setConnection("Chưa kết nối", "muted");
   showPanel("dashboard");
 }
@@ -432,6 +529,10 @@ function buildOrderPayload() {
 }
 
 async function refreshAll() {
+  if (!state.demo && !state.spreadsheetId) {
+    renderDashboard({ metrics: {}, channels: [], recentOrders: [] });
+    return;
+  }
   el.refreshButton.disabled = true;
   try {
     const result = state.demo ? demoDashboard() : await api("dashboard");
@@ -484,7 +585,7 @@ async function loadRecords() {
 
 async function api(action, args = {}) {
   if (!config.apiUrl) throw new Error("Chưa cấu hình URL Apps Script trong config.js.");
-  const body = new URLSearchParams({ payload: JSON.stringify({ action, token: state.credential, ...args }) });
+  const body = new URLSearchParams({ payload: JSON.stringify({ action, token: state.credential, accessToken: state.accessToken, spreadsheetId: state.spreadsheetId, ...args }) });
   const response = await fetch(config.apiUrl, { method: "POST", body, redirect: "follow" });
   if (!response.ok) throw new Error(`API trả về HTTP ${response.status}.`);
   const result = await response.json();

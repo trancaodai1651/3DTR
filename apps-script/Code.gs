@@ -42,6 +42,15 @@ const ENTITY_CONFIG = Object.freeze({
   },
 });
 
+const STANDARD_SHEETS = Object.freeze([
+  "1_Mua vào", "2_Tính giá", "3_Nhựa", "4_Phí sàn", "5_Danh mục", "6_Hướng dẫn",
+  "7_Đơn hàng", "8_Rút tiền", "9_Sản phẩm", "10_Kho nhựa", "11_Khách hàng",
+  "12_Đầu tư", "13_Tài khoản", "14_Dashboard", "15_Hãng nhựa",
+]);
+
+const DRIVE_SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
+const OAUTH_SCOPES = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets";
+
 function doGet() {
   return json_({ ok: true, data: { service: "3DTR API", status: "ready" } });
 }
@@ -50,6 +59,28 @@ function doPost(event) {
   try {
     const input = parseInput_(event);
     const user = verifyGoogleToken_(input.token);
+    const accessToken = input.accessToken ? verifyAccessToken_(input.accessToken, user.email) : "";
+    if (["files", "createCopy"].includes(input.action) && !accessToken) throw new Error("Cần cấp quyền Google Drive để chọn hoặc khởi tạo file.");
+    if (["dashboard", "records", "submit", "session"].includes(input.action) && input.spreadsheetId && !accessToken) throw new Error("Cần cấp quyền Google Sheets cho file đã chọn.");
+    if (input.spreadsheetId && accessToken) {
+      const selected = spreadsheetMetadata_(accessToken, input.spreadsheetId);
+      const role = selected.role;
+      if (input.action === "session") return json_({ ok: true, data: { user, role, spreadsheetName: selected.name, spreadsheetId: selected.id, standard: selected.standard, missingSheets: selected.missingSheets } });
+      if (role === "none") throw new Error("Tài khoản chưa được cấp quyền trên Google Sheet đã chọn.");
+      let data;
+      switch (input.action) {
+        case "dashboard": data = dashboardApi_(accessToken, input.spreadsheetId); break;
+        case "records": data = recordsApi_(accessToken, input.spreadsheetId, input.entity, input.limit); break;
+        case "submit":
+          if (role !== "editor") throw new Error("Tài khoản chỉ có quyền xem nên không thể thêm dữ liệu.");
+          data = submitApi_(accessToken, input.spreadsheetId, input.entity, input.data, user);
+          break;
+        default: throw new Error("Hành động không hợp lệ.");
+      }
+      return json_({ ok: true, data });
+    }
+    if (input.action === "files") return json_({ ok: true, data: listSpreadsheets_(accessToken) });
+    if (input.action === "createCopy") return json_({ ok: true, data: createTemplateCopy_(accessToken, input.templateId, input.name) });
     const role = getFileRole_(user.email);
     if (role === "none") throw new Error("Tài khoản chưa được cấp quyền trên Google Sheet 3DTR.");
 
@@ -76,6 +107,141 @@ function parseInput_(event) {
   if (!input.token) throw new Error("Thiếu Google ID token.");
   return input;
 }
+
+function verifyAccessToken_(token, expectedEmail) {
+  const response = UrlFetchApp.fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(token)}`, { muteHttpExceptions: true });
+  if (response.getResponseCode() !== 200) throw new Error("Quyền Google Drive/Sheets không hợp lệ hoặc đã hết hạn.");
+  const claims = JSON.parse(response.getContentText());
+  if (claims.email && String(claims.email).toLowerCase() !== String(expectedEmail).toLowerCase()) throw new Error("Tài khoản Google cấp quyền không khớp tài khoản đăng nhập.");
+  if (claims.aud && claims.aud !== property_("GOOGLE_CLIENT_ID")) throw new Error("OAuth Client ID không khớp.");
+  if (claims.scope && !String(claims.scope).includes("spreadsheets")) throw new Error("Thiếu quyền Google Sheets.");
+  return token;
+}
+
+function googleApi_(accessToken, url, options) {
+  const request = Object.assign({ muteHttpExceptions: true, headers: { Authorization: `Bearer ${accessToken}` } }, options || {});
+  const response = UrlFetchApp.fetch(url, request);
+  const body = response.getContentText();
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    let message = body;
+    try { message = JSON.parse(body).error.message || message; } catch (error) {}
+    throw new Error(`Google API: ${message}`);
+  }
+  return body ? JSON.parse(body) : {};
+}
+
+function listSpreadsheets_(accessToken) {
+  const query = encodeURIComponent(`mimeType='${DRIVE_SPREADSHEET_MIME}' and trashed=false`);
+  const fields = encodeURIComponent("files(id,name,modifiedTime,owners(displayName,emailAddress),capabilities(canEdit,canComment),webViewLink),nextPageToken");
+  const result = googleApi_(accessToken, `https://www.googleapis.com/drive/v3/files?q=${query}&pageSize=100&orderBy=modifiedTime%20desc&fields=${fields}`);
+  return (result.files || []).map((file) => ({
+    id: file.id, name: file.name, modifiedTime: file.modifiedTime, webViewLink: file.webViewLink || `https://docs.google.com/spreadsheets/d/${file.id}/edit`,
+    canEdit: Boolean(file.capabilities && file.capabilities.canEdit), owner: file.owners && file.owners[0] ? file.owners[0].emailAddress : "",
+  }));
+}
+
+function createTemplateCopy_(accessToken, templateId, requestedName) {
+  const allowedTemplate = property_("TEMPLATE_SPREADSHEET_ID");
+  if (!templateId || templateId !== allowedTemplate) throw new Error("Mẫu 3DTR không hợp lệ.");
+  const name = String(requestedName || "").trim() || `3DTR - Bản riêng - ${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmm")}`;
+  return googleApi_(accessToken, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(templateId)}/copy?supportsAllDrives=true`, {
+    method: "post", contentType: "application/json", payload: JSON.stringify({ name, appProperties: { threeDtrTemplateId: templateId, threeDtrTemplateVersion: new Date().toISOString() } }),
+  });
+}
+
+function spreadsheetMetadata_(accessToken, spreadsheetId) {
+  const fields = encodeURIComponent("spreadsheetId,properties(title),sheets(properties(title)),spreadsheetUrl");
+  const sheet = googleApi_(accessToken, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?includeGridData=false&fields=${fields}`);
+  const names = (sheet.sheets || []).map((item) => item.properties && item.properties.title).filter(Boolean);
+  const missingSheets = STANDARD_SHEETS.filter((name) => !names.includes(name));
+  const driveFields = encodeURIComponent("id,name,capabilities(canEdit,canComment),owners(emailAddress),permissions(emailAddress,role,type)");
+  const file = googleApi_(accessToken, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}?fields=${driveFields}`);
+  const owner = file.owners && file.owners[0] ? file.owners[0].emailAddress : "";
+  const me = String(verifyAccessTokenEmail_(accessToken) || "").toLowerCase();
+  const direct = (file.permissions || []).find((permission) => String(permission.emailAddress || "").toLowerCase() === me);
+  const role = owner.toLowerCase() === me || (file.capabilities && file.capabilities.canEdit) || (direct && ["owner", "writer"].includes(direct.role)) ? "editor" : (file.capabilities && file.capabilities.canComment) || direct ? "viewer" : "none";
+  if (missingSheets.length) throw new Error(`File không đúng mẫu 3DTR. Thiếu sheet: ${missingSheets.join(", ")}.`);
+  return { id: spreadsheetId, name: sheet.properties && sheet.properties.title, role, standard: true, missingSheets: [] };
+}
+
+function verifyAccessTokenEmail_(token) {
+  const response = UrlFetchApp.fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(token)}`, { muteHttpExceptions: true });
+  if (response.getResponseCode() !== 200) return "";
+  const claims = JSON.parse(response.getContentText());
+  return claims.email || "";
+}
+
+function sheetsValues_(accessToken, spreadsheetId, range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`;
+  return googleApi_(accessToken, url).values || [];
+}
+
+function dashboardApi_(accessToken, spreadsheetId) {
+  const values = sheetsValues_(accessToken, spreadsheetId, "14_Dashboard!A3:I14");
+  const metricMap = {};
+  values.slice(1).forEach((row) => { if (row[0]) metricMap[String(row[0])] = row[1]; });
+  const orderRows = sheetsValues_(accessToken, spreadsheetId, "7_Đơn hàng!A4:V").filter((row) => String(row[0] || "").trim()).slice(-6).reverse();
+  return {
+    metrics: {
+      revenue: numeric_(metricMap["Tổng doanh thu sản phẩm (đ)"]), profit: numeric_(metricMap["Lợi nhuận ròng (đ)"]), orders: numeric_(metricMap["Số đơn hàng"]), customers: numeric_(metricMap["Số khách hàng"]), lowStock: numeric_(metricMap["Cuộn nhựa dưới 500 g"]), margin: numeric_(metricMap["Biên lợi nhuận ròng"]),
+    },
+    channels: values.slice(1, 8).filter((row) => row[3]).map((row) => ({ channel: row[3], revenue: numeric_(row[4]), profit: numeric_(row[5]) })),
+    recentOrders: orderRows.map((row) => ({ code: row[0], platform: row[3], product: row[5], revenue: numeric_(row[9]), status: row[20] })),
+  };
+}
+
+function recordsApi_(accessToken, spreadsheetId, entityKey, requestedLimit) {
+  const cfg = entity_(entityKey);
+  const width = entityWidth_(entityKey);
+  const endColumn = columnName_(width);
+  const rows = sheetsValues_(accessToken, spreadsheetId, `${cfg.sheet}!A${cfg.startRow - 1}:${endColumn}`);
+  const headers = rows[0] || [];
+  const data = rows.slice(1).filter((row) => String(row[0] || "").trim()).slice(-(Math.max(1, Math.min(Number(requestedLimit) || 25, 100)))).reverse();
+  return { headers, rows: data };
+}
+
+function submitApi_(accessToken, spreadsheetId, entityKey, rawData, user) {
+  if (entityKey === "order" && rawData && Array.isArray(rawData.lineItems)) return submitOrderApi_(accessToken, spreadsheetId, rawData, user);
+  const cfg = entity_(entityKey);
+  const data = rawData && typeof rawData === "object" ? rawData : {};
+  cfg.required.forEach((key) => { if (data[key] === undefined || data[key] === null || String(data[key]).trim() === "") throw new Error(`Thiếu trường bắt buộc: ${key}.`); });
+  const row = firstEmptyApiRow_(accessToken, spreadsheetId, cfg);
+  const updates = cfg.columns.map(([column, key, type]) => ({ range: `${cfg.sheet}!${columnName_(column)}${row}`, values: [[coerce_(data[key], type)]] }));
+  sheetsBatchUpdate_(accessToken, spreadsheetId, updates);
+  return { row, sheet: cfg.sheet, id: String(data[cfg.columns[0][1]]), count: 1 };
+}
+
+function submitOrderApi_(accessToken, spreadsheetId, data, user) {
+  const cfg = entity_("order");
+  cfg.required.forEach((key) => { if (data[key] === undefined || data[key] === null || String(data[key]).trim() === "") throw new Error(`Thiếu trường bắt buộc: ${key}.`); });
+  if (!data.lineItems.length || data.lineItems.length > 50) throw new Error("Đơn hàng phải có từ 1 đến 50 dòng chi tiết.");
+  const updates = [];
+  const rows = [];
+  data.lineItems.forEach((line, index) => {
+    if (!line || String(line.productName || "").trim() === "") throw new Error(`Thiếu tên ở dòng chi tiết ${index + 1}.`);
+    if (!Number.isFinite(Number(line.quantity)) || Number(line.quantity) < 1) throw new Error(`Số lượng ở dòng ${index + 1} không hợp lệ.`);
+    if (!Number.isFinite(Number(line.unitPrice)) || Number(line.unitPrice) < 0) throw new Error(`Giá bán ở dòng ${index + 1} không hợp lệ.`);
+    const row = firstEmptyApiRow_(accessToken, spreadsheetId, cfg);
+    rows.push(row);
+    const rowData = { ...data, ...line, sku: line.sku || "", quantity: Number(line.quantity), unitPrice: Number(line.unitPrice), platformFee: index === 0 ? data.platformFee : 0, otherPaymentFee: index === 0 ? data.otherPaymentFee : 0, customerShipping: index === 0 ? data.customerShipping : 0, sellerShipping: index === 0 ? data.sellerShipping : 0, note: `[${line.itemType || "Sản phẩm"}] ${line.note || data.note || ""}`.trim() };
+    cfg.columns.forEach(([column, key, type]) => updates.push({ range: `${cfg.sheet}!${columnName_(column)}${row}`, values: [[coerce_(rowData[key], type)]] }));
+  });
+  sheetsBatchUpdate_(accessToken, spreadsheetId, updates);
+  return { row: rows[0], rows, count: rows.length, sheet: cfg.sheet, id: String(data.orderCode) };
+}
+
+function firstEmptyApiRow_(accessToken, spreadsheetId, cfg) {
+  const values = sheetsValues_(accessToken, spreadsheetId, `${cfg.sheet}!A${cfg.startRow}:A2000`);
+  const offset = values.findIndex((row) => !String(row[0] || "").trim());
+  return cfg.startRow + (offset >= 0 ? offset : values.length);
+}
+
+function sheetsBatchUpdate_(accessToken, spreadsheetId, updates) {
+  googleApi_(accessToken, `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, { method: "post", contentType: "application/json", payload: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updates }) });
+}
+
+function entityWidth_(key) { return key === "order" ? 22 : Math.max(...entity_(key).columns.map(([column]) => column)); }
+function columnName_(column) { let name = ""; let current = Number(column); while (current > 0) { const remainder = (current - 1) % 26; name = String.fromCharCode(65 + remainder) + name; current = Math.floor((current - 1) / 26); } return name; }
 
 function verifyGoogleToken_(token) {
   const clientId = property_("GOOGLE_CLIENT_ID");

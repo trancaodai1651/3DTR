@@ -92,6 +92,19 @@
             Tài khoản có quyền xem. Bạn có thể theo dõi dữ liệu nhưng không thể thêm bản ghi.
           </div>
 
+          <section id="fileManager" class="card file-manager hidden" aria-labelledby="fileManagerTitle">
+            <div class="card-heading">
+              <div><span>Google Drive</span><h3 id="fileManagerTitle">Chọn file dữ liệu 3DTR</h3></div>
+              <span id="fileManagerRole" class="badge badge-muted">Chưa chọn</span>
+            </div>
+            <p id="fileManagerMessage" class="microcopy">Chỉ sử dụng file có đủ cấu trúc chuẩn 3DTR. Bản sao tạo từ mẫu là độc lập, template cập nhật sau này không làm thay đổi dữ liệu của bạn.</p>
+            <div class="file-manager-actions">
+              <select id="sheetSelector" aria-label="Chọn Google Sheet"></select>
+              <button id="createSheetButton" class="button button-primary" type="button">Tạo bản Google Sheet riêng</button>
+              <a id="downloadTemplateButton" class="button button-secondary" href="downloads/3DTR_Quan_Ly_Kinh_Doanh_Thong_Minh.xlsx" download>Tải mẫu Excel</a>
+            </div>
+          </section>
+
           <section id="dashboardPanel" class="panel-view">
             <div class="panel-heading">
               <div><p class="eyebrow">Tổng quan</p><h2>Tình hình kinh doanh</h2></div>

@@ -163,6 +163,11 @@ main { max-width: 1440px; margin: 0 auto; padding: 12px 32px 48px; }
 .select-inline { width: min(260px, 46vw); }
 
 .table-card { overflow: hidden; }
+.file-manager { margin: 12px 0; padding: 18px; }
+.file-manager-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.file-manager-actions select { flex: 1 1 260px; min-width: 0; }
+.file-manager-actions .button { white-space: nowrap; }
+.file-manager .microcopy { max-width: 820px; margin: 0 0 14px; }
 .table-scroll { overflow: auto; max-height: calc(100vh - 238px); }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; font-size: .75rem; }
@@ -212,6 +217,8 @@ code { padding: 2px 5px; border-radius: 5px; background: #e8f1ed; color: var(--g
   .kpi strong { margin-top: 15px; font-size: 1.35rem; }
   .bar-row { grid-template-columns: 72px minmax(0,1fr) 76px; gap: 7px; }
   .entry-form { padding: 16px 13px; }
+  .file-manager-actions { align-items: stretch; flex-direction: column; }
+  .file-manager-actions select, .file-manager-actions .button { width: 100%; }
   .form-grid { gap: 14px 10px; }
   .field, .field.wide { grid-column: 1 / -1; }
   .order-line-grid { grid-template-columns: 1fr; }
