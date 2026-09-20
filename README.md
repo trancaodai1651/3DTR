@@ -12,6 +12,8 @@
 - Dashboard doanh thu, lợi nhuận, số đơn, tồn kho và dữ liệu gần đây.
 - Giao diện mobile-first, chạy trên GitHub Pages mà không cần máy chủ riêng.
 - Apps Script xác minh Google ID token, kiểm tra quyền file và chỉ ghi vào các cột đầu vào; cột công thức không bị ghi đè.
+- Người dùng có thể cấp quyền Drive/Sheets để chọn nhiều file Google Sheets; ứng dụng chỉ nhận file có đủ 15 sheet chuẩn.
+- Nếu chưa có file, nút **Tạo bản Google Sheet riêng** sẽ copy template một lần vào My Drive của người dùng. Bản copy độc lập, không liên kết công thức với template.
 
 Workbook hoàn chỉnh nằm tại `downloads/3DTR_Quan_Ly_Kinh_Doanh_Thong_Minh.xlsx`.
 
@@ -74,6 +76,8 @@ Sửa `config.js`:
 window.APP_CONFIG = Object.freeze({
   googleClientId: "YOUR_CLIENT_ID.apps.googleusercontent.com",
   apiUrl: "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+  templateSpreadsheetId: "SPREADSHEET_ID_CUA_TEMPLATE",
+  driveScopes: "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
   spreadsheetName: "3DTR",
 });
 ```
