@@ -201,7 +201,7 @@ function requestGoogleDriveAccess() {
 
 async function loadFiles() {
   const files = await api("files");
-  state.files = Array.isArray(files) ? files : [];
+  state.files = (Array.isArray(files) ? files : []).filter((file) => file.id !== config.templateSpreadsheetId);
   renderFileManager();
   if (!state.files.length) el.fileManagerMessage.textContent = "Chưa có Google Sheet nào được cấp quyền. Hãy tải mẫu và bấm Tạo bản Google Sheet riêng; bản sao sẽ nằm trong Drive của bạn và không liên kết ngược với template.";
 }
