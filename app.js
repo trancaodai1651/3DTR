@@ -58,6 +58,7 @@ const entities = {
       field("purchaseDate", "Ngày mua", "date", true),
       select("category", "Phân loại", ["Máy in", "Nhựa in", "Bàn in", "Đầu in", "Phụ kiện khác", "Dụng cụ", "Thiết bị / linh kiện"], true),
       field("itemName", "Tên sản phẩm/phụ kiện", "text", true),
+      field("color", "Màu nhựa", "text", false, "VD: Đen, Trắng, Đỏ"),
       field("model", "Mô tả/Model", "text"),
       field("vendor", "Nhà cung cấp", "text"),
       field("quantity", "Số lượng", "number", true, "1", { min: 0, step: 1 }),
@@ -456,6 +457,24 @@ function renderForm() {
   });
   el.formMessage.className = "form-message";
   el.formMessage.textContent = state.role === "viewer" ? "Tài khoản Viewer không thể gửi biểu mẫu." : "Các trường có dấu * là bắt buộc.";
+  bindPurchaseColorField();
+}
+
+function bindPurchaseColorField() {
+  if (state.entity !== "purchase") return;
+  const category = document.getElementById("field-category");
+  const color = document.getElementById("field-color");
+  const colorField = color?.closest(".field");
+  if (!category || !color || !colorField) return;
+  const sync = () => {
+    const isFilament = category.value === "Nhựa in";
+    colorField.classList.toggle("hidden", !isFilament);
+    color.required = isFilament;
+    color.setAttribute("aria-required", String(isFilament));
+    if (!isFilament) color.value = "";
+  };
+  category.addEventListener("change", sync);
+  sync();
 }
 
 function newOrderLine() {

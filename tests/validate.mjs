@@ -25,5 +25,7 @@ for (const entity of ["order", "customer", "product", "purchase", "filament", "i
 }
 if (!api.includes('role !== "editor"')) throw new Error("Backend editor enforcement is missing.");
 if (!api.includes("verifyGoogleToken_")) throw new Error("Google token verification is missing.");
+if (!js.includes('field("color", "Màu nhựa"')) throw new Error("Purchase color field is missing.");
+if (!api.includes('[12,"color","text"]')) throw new Error("Purchase color column mapping is missing.");
 if (!css.includes("@media (max-width: 760px)")) throw new Error("Mobile breakpoint is missing.");
 console.log("3DTR static site and Apps Script structure validated.");

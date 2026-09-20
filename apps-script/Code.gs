@@ -23,7 +23,7 @@ const ENTITY_CONFIG = Object.freeze({
   purchase: {
     sheet: "1_Mua vào", startRow: 5, keyColumn: 1,
     required: ["purchaseDate", "category", "itemName", "quantity", "unitCost"],
-    columns: [[1,"purchaseDate","date"],[2,"category","text"],[3,"itemName","text"],[4,"model","text"],[5,"vendor","text"],[6,"quantity","number"],[7,"unitCost","number"],[9,"referenceSalePrice","number"],[10,"note","text"]],
+    columns: [[1,"purchaseDate","date"],[2,"category","text"],[3,"itemName","text"],[4,"model","text"],[5,"vendor","text"],[6,"quantity","number"],[7,"unitCost","number"],[9,"referenceSalePrice","number"],[10,"note","text"],[12,"color","text"]],
   },
   filament: {
     sheet: "10_Kho nhựa", startRow: 4, keyColumn: 1,
@@ -206,6 +206,7 @@ function submitApi_(accessToken, spreadsheetId, entityKey, rawData, user) {
   const cfg = entity_(entityKey);
   const data = rawData && typeof rawData === "object" ? rawData : {};
   cfg.required.forEach((key) => { if (data[key] === undefined || data[key] === null || String(data[key]).trim() === "") throw new Error(`Thiếu trường bắt buộc: ${key}.`); });
+  if (entityKey === "purchase" && String(data.category).trim() === "Nhựa in" && String(data.color || "").trim() === "") throw new Error("Vui lòng nhập màu nhựa khi chọn Nhựa in.");
   const row = firstEmptyApiRow_(accessToken, spreadsheetId, cfg);
   const updates = cfg.columns.map(([column, key, type]) => ({ range: `${cfg.sheet}!${columnName_(column)}${row}`, values: [[coerce_(data[key], type)]] }));
   sheetsBatchUpdate_(accessToken, spreadsheetId, updates);

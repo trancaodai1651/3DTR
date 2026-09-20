@@ -9,6 +9,7 @@
   - `Owner` / `Editor`: xem và thêm dữ liệu.
   - `Viewer` / `Commenter`: chỉ xem, API từ chối mọi yêu cầu ghi.
 - Bảy biểu mẫu: đơn hàng, khách hàng, sản phẩm, mua vào, kho nhựa, đầu tư và rút tiền.
+- Khi chọn `Nhựa in` trong biểu mẫu `Mua vào`, trường `Màu nhựa` bắt buộc và được ghi vào cột `L - Màu nhựa` để kiểm soát tồn kho theo màu.
 - Dashboard doanh thu, lợi nhuận, số đơn, tồn kho và dữ liệu gần đây.
 - Giao diện mobile-first, chạy trên GitHub Pages mà không cần máy chủ riêng.
 - Apps Script xác minh Google ID token, kiểm tra quyền file và chỉ ghi vào các cột đầu vào; cột công thức không bị ghi đè.
