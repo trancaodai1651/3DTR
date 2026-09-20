@@ -244,7 +244,7 @@ function renderFileManager() {
   el.fileManagerRole.className = `badge${state.role === "none" ? " badge-muted" : ""}`;
   el.createSheetButton.disabled = !state.accessToken;
   el.authorizeDriveButton.disabled = !state.credential;
-  el.importSheetButton.disabled = !state.accessToken;
+  el.importSheetButton.disabled = !state.credential;
 }
 
 async function selectSpreadsheet(spreadsheetId) {
@@ -283,10 +283,13 @@ function extractSpreadsheetId(value) {
 async function importSheet() {
   const id = extractSpreadsheetId(el.sheetLinkInput.value);
   if (!id) return toast("Hãy dán link Google Sheet hoặc ID file hợp lệ.", true);
-  if (!state.accessToken) return toast("Hãy bấm Cấp quyền Drive/Sheets trước khi import.", true);
+  if (!state.accessToken) {
+    await requestDriveAccessAndLoad();
+    if (!state.accessToken) return;
+  }
   el.importSheetButton.disabled = true;
   const selected = await selectSpreadsheet(id);
-  el.importSheetButton.disabled = !state.accessToken;
+  el.importSheetButton.disabled = !state.credential;
   if (selected) {
     if (!state.files.some((file) => file.id === id)) state.files.unshift({ id, name: el.sheetName.textContent || "Google Sheet đã import", canEdit: state.role === "editor" });
     renderFileManager();

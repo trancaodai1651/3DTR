@@ -159,7 +159,8 @@ function spreadsheetMetadata_(accessToken, spreadsheetId) {
   const owner = file.owners && file.owners[0] ? file.owners[0].emailAddress : "";
   const me = String(verifyAccessTokenEmail_(accessToken) || "").toLowerCase();
   const direct = (file.permissions || []).find((permission) => String(permission.emailAddress || "").toLowerCase() === me);
-  const role = owner.toLowerCase() === me || (file.capabilities && file.capabilities.canEdit) || (direct && ["owner", "writer"].includes(direct.role)) ? "editor" : (file.capabilities && file.capabilities.canComment) || direct ? "viewer" : "none";
+  const publicViewer = (file.permissions || []).some((permission) => permission.type === "anyone" && ["reader", "commenter"].includes(permission.role));
+  const role = owner.toLowerCase() === me || (file.capabilities && file.capabilities.canEdit) || (direct && ["owner", "writer"].includes(direct.role)) ? "editor" : (file.capabilities && file.capabilities.canComment) || direct || publicViewer ? "viewer" : "none";
   if (missingSheets.length) throw new Error(`File không đúng mẫu 3DTR. Thiếu sheet: ${missingSheets.join(", ")}.`);
   return { id: spreadsheetId, name: sheet.properties && sheet.properties.title, role, standard: true, missingSheets: [] };
 }
