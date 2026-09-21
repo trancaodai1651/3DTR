@@ -134,7 +134,7 @@ const el = Object.fromEntries([
   "userAvatar", "userName", "userEmail", "roleBadge", "sheetName", "demoBanner", "viewerBanner", "entryPermission",
   "kpiGrid", "channelChart", "dashboardRecent", "refreshButton", "entityTabs", "entryForm", "formFields", "formMessage",
   "submitButton", "recordEntity", "recordsHead", "recordsBody", "recordsEmpty", "toast",
-  "fileManager", "fileManagerMessage", "fileManagerRole", "sheetSelector", "authorizeDriveButton", "createSheetButton", "openTemplateButton", "downloadTemplateButton", "sheetLinkInput", "importSheetButton",
+  "fileManager", "fileManagerMessage", "fileManagerRole", "sheetSelector", "authorizeDriveButton", "createSheetButton", "openTemplateButton", "downloadTemplateButton", "sheetLinkInput", "importSheetButton", "importTypeBadge", "fileImportHint",
 ].map((id) => [id, document.getElementById(id)]));
 
 document.addEventListener("DOMContentLoaded", init);
@@ -171,10 +171,12 @@ function bindEvents() {
   el.authorizeDriveButton.addEventListener("click", requestDriveAccessAndLoad);
   el.createSheetButton.addEventListener("click", createPersonalSheet);
   el.importSheetButton.addEventListener("click", importSheet);
+  el.sheetLinkInput.addEventListener("input", syncImportUi);
   el.entryForm.addEventListener("submit", submitEntry);
   el.recordEntity.addEventListener("change", loadRecords);
   document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => showPanel(button.dataset.view)));
   document.querySelectorAll("[data-go]").forEach((button) => button.addEventListener("click", () => showPanel(button.dataset.go)));
+  syncImportUi();
 }
 
 function decodeCredential(token) {
@@ -245,7 +247,7 @@ async function loadFiles() {
 function renderFileManager() {
   if (!el.sheetSelector) return;
   el.sheetSelector.innerHTML = state.files.length
-    ? state.files.map((file) => `<option value="${escapeHtml(file.id)}">${escapeHtml(file.name)}${file.remembered ? " · cần kiểm tra quyền" : file.canEdit ? " · Editor" : " · Viewer"}</option>`).join("")
+    ? state.files.map((file) => `<option value="${escapeHtml(file.id)}">${escapeHtml(file.name)}${file.sourceType ? ` · ${escapeHtml(file.sourceType)}` : ""}${file.remembered ? " · cần kiểm tra quyền" : file.canEdit ? " · Editor" : " · Viewer"}</option>`).join("")
     : "<option value=\"\">Chưa có file Google Sheet chuẩn</option>";
   el.sheetSelector.value = state.spreadsheetId || state.files[0]?.id || "";
   el.fileManagerRole.textContent = state.role === "editor" ? "Editor" : state.role === "viewer" ? "Viewer" : "Chưa chọn";
@@ -253,6 +255,48 @@ function renderFileManager() {
   el.createSheetButton.disabled = !state.accessToken;
   el.authorizeDriveButton.disabled = !state.credential;
   el.importSheetButton.disabled = !state.credential;
+}
+
+function detectImportKind(value) {
+  const input = String(value || "").trim().toLowerCase();
+  if (!input) return "unknown";
+  if (input.includes("/spreadsheets/d/")) return "sheets";
+  if (/\.(xlsx|xls|xlsm|xlsb)(?:[?#&]|$)/i.test(input)) return "excel";
+  if (input.includes("/file/d/") || input.includes("drive.google.com") || /[?&]id=/.test(input)) return "drive";
+  if (/^[a-z0-9_-]{20,}$/i.test(input)) return "drive";
+  return "unknown";
+}
+
+function syncImportUi() {
+  if (!el.sheetLinkInput || !el.importTypeBadge || !el.importSheetButton || !el.fileImportHint) return;
+  const kind = detectImportKind(el.sheetLinkInput.value);
+  const modes = {
+    unknown: {
+      badge: "Chưa nhận diện", badgeClass: "badge-muted", button: "Import file",
+      placeholder: "Dán link Google Sheet hoặc Drive .xlsx/.xls",
+      hint: "Dán link Google Sheet hoặc link file Excel trong Google Drive. 3DTR sẽ tự đổi giao diện và chọn đúng cách xử lý.",
+    },
+    sheets: {
+      badge: "Google Sheet", badgeClass: "badge-sheet", button: "Kết nối Google Sheet",
+      placeholder: "Dán link Google Sheet của bạn",
+      hint: "Google Sheet sẽ được kiểm tra cấu trúc 15 sheet và kết nối trực tiếp. Dữ liệu không bị sao chép.",
+    },
+    excel: {
+      badge: "Excel → Google Sheet", badgeClass: "badge-excel", button: "Chuyển thành Google Sheet",
+      placeholder: "Dán link Drive của file .xlsx/.xls",
+      hint: "Excel sẽ được chuyển thành một Google Sheet 3DTR riêng trong Drive; file Excel gốc không bị thay đổi.",
+    },
+    drive: {
+      badge: "Google Drive", badgeClass: "badge-drive", button: "Kiểm tra và import",
+      placeholder: "Dán link file trong Google Drive",
+      hint: "3DTR sẽ đọc loại file bằng quyền Drive rồi kết nối Google Sheet hoặc chuyển Excel tương ứng.",
+    },
+  }[kind];
+  el.importTypeBadge.textContent = modes.badge;
+  el.importTypeBadge.className = `badge ${modes.badgeClass}`;
+  el.importSheetButton.textContent = modes.button;
+  el.sheetLinkInput.placeholder = modes.placeholder;
+  el.fileImportHint.textContent = modes.hint;
 }
 
 async function selectSpreadsheet(spreadsheetId) {
@@ -310,6 +354,7 @@ async function importSheet() {
       const selectedCopy = await selectSpreadsheet(created.id);
       if (selectedCopy) {
         el.sheetLinkInput.value = "";
+        syncImportUi();
         toast("Đây là mẫu công khai nên 3DTR đã tạo bản Google Sheet riêng có quyền Editor trong Drive của bạn.");
       }
     } catch (error) {
@@ -330,9 +375,10 @@ async function importSheet() {
   const selected = await selectSpreadsheet(imported.id);
   el.importSheetButton.disabled = !state.credential;
   if (selected) {
-    if (!state.files.some((file) => file.id === imported.id)) state.files.unshift({ id: imported.id, name: imported.name || el.sheetName.textContent || "Google Sheet đã import", canEdit: state.role === "editor" });
+    if (!state.files.some((file) => file.id === imported.id)) state.files.unshift({ id: imported.id, name: imported.name || el.sheetName.textContent || "Google Sheet đã import", canEdit: state.role === "editor", sourceType: imported.convertedFromExcel ? "Excel → Google Sheet" : "Google Sheet" });
     renderFileManager();
     el.sheetLinkInput.value = "";
+    syncImportUi();
     toast(imported.convertedFromExcel
       ? "Đã chuyển Excel thành Google Sheet 3DTR trong Drive của bạn và ghi nhớ file.": "Đã import Google Sheet và ghi nhớ cho lần đăng nhập sau.");
   }

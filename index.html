@@ -9,10 +9,10 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://accounts.google.com" />
-    <link rel="stylesheet" href="styles.css?v=20260920-8" />
+    <link rel="stylesheet" href="styles.css?v=20260920-9" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="config.js?v=20260920-8"></script>
-    <script src="app.js?v=20260920-8" defer></script>
+    <script src="config.js?v=20260920-9"></script>
+    <script src="app.js?v=20260920-9" defer></script>
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -106,12 +106,12 @@
               <a id="downloadTemplateButton" class="button button-secondary" href="downloads/3DTR_Quan_Ly_Kinh_Doanh_Thong_Minh.xlsx" download>Tải mẫu Excel</a>
             </div>
             <div class="file-import-row">
-              <label for="sheetLinkInput">Import Google Sheet hoặc file Excel</label>
+              <div class="file-import-label"><label for="sheetLinkInput">Import Google Sheet hoặc file Excel</label><span id="importTypeBadge" class="badge badge-muted">Chưa nhận diện</span></div>
               <div class="file-import-controls">
                 <input id="sheetLinkInput" type="url" inputmode="url" placeholder="Dán link Google Sheet hoặc Drive .xlsx/.xls" autocomplete="off">
                 <button id="importSheetButton" class="button button-ghost" type="button">Import file</button>
               </div>
-              <small>Nhận link Google Sheet hoặc link file Excel trong Google Drive (drive.google.com/file/d/... hoặc .xlsx/.xls). Excel sẽ được chuyển thành một Google Sheet 3DTR riêng trong Drive của bạn; file gốc không bị thay đổi.</small>
+              <small id="fileImportHint">Dán link Google Sheet hoặc link file Excel trong Google Drive. 3DTR sẽ tự đổi giao diện và chọn đúng cách xử lý.</small>
             </div>
           </section>
 
